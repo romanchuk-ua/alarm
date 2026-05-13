@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Air Defense: MiG-31K Update</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body, html { margin: 0; padding: 0; height: 100%; background-color: #0f0f0f; font-family: 'Segoe UI', sans-serif; overflow: hidden; user-select: none; }
+        #map { width: 100%; height: 100vh; z-index: 1; filter: grayscale(0.1) contrast(1.1); }
+
+        #hud { position: absolute; top: 10px; left: 10px; right: 10px; background: rgba(0, 0, 0, 0.9); color: #fff; padding: 12px; border-radius: 8px; z-index: 1000; display: flex; justify-content: space-between; align-items: center; border: 1px solid #c00; pointer-events: none; }
+        .budget-value { color: #4CAF50; font-size: 18px; font-weight: bold; }
+        .income-value { color: #00fa9a; font-size: 12px; }
+        
+        #chuyka-btn { pointer-events: auto; background: #8B0000; border: 1px solid #ff4444; color: white; padding: 5px 10px; border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 12px; transition: 0.2s; }
+        #chuyka-btn.active { background: #006400; border-color: #00ff00; }
+
+        #shop-container { position: absolute; bottom: 15px; left: 10px; right: 10px; z-index: 1000; }
+        #tabs { display: flex; gap: 4px; }
+        .tab-btn { flex: 1; padding: 10px; background: #222; border: 1px solid #444; color: white; border-radius: 8px 8px 0 0; font-weight: bold; cursor: pointer; font-size: 12px; }
+        .tab-btn.active { background: #800; border-color: #f00; }
+        #shop { background: rgba(15, 15, 15, 0.95); border-radius: 0 0 12px 12px; display: flex; gap: 8px; padding: 10px; overflow-x: auto; border: 1px solid #444; }
+        #shop::-webkit-scrollbar { display: none; }
+
+        .item-card { flex: 0 0 auto; width: 110px; background: #1a1a1a; border: 2px solid #333; border-radius: 8px; padding: 8px; text-align: center; color: white; cursor: pointer; position: relative; }
+        .item-card.active { border-color: #f00; background: #2a1010; }
+        .i-limit { position: absolute; top: -5px; right: -5px; background: #f00; color: #fff; font-size: 9px; padding: 2px 5px; border-radius: 10px; }
+        .i-name { font-size: 11px; font-weight: bold; margin-bottom: 3px; }
+        .i-price { font-size: 12px; color: #ff8c00; font-weight: bold; }
+        .i-extra { font-size: 9px; color: #0ff; margin-top: 2px; }
+
+        #toast { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); background: rgba(136, 0, 0, 0.9); color: white; padding: 10px 20px; border-radius: 8px; z-index: 2000; display: none; font-weight: bold; border: 1px solid #fff; text-align: center; }
+        #center-message { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: white; z-index: 2000; pointer-events: none; text-shadow: 0 0 10px #000; }
+        
+        /* Гарний багатошаровий вибух */
+        .explosion-epic { width: 60px; height: 60px; background: radial-gradient(circle, #ffffff 10%, #ffff00 30%, #ff4500 50%, #8b0000 80%, transparent 100%); border-radius: 50%; animation: epicBoom 0.8s ease-out forwards; box-shadow: 0 0 20px #ff4500, inset 0 0 20px #fff; }
+        @keyframes epicBoom { 0% { transform: scale(0.1); opacity: 1; filter: brightness(2); } 50% { transform: scale(1.5); opacity: 0.8; } 100% { transform: scale(3); opacity: 0; filter: brightness(0.5); } }
+        
+        .tracer { stroke-width: 2; stroke-dasharray: 5; animation: dash 0.3s linear infinite; }
+        @keyframes dash { to { stroke-dashoffset: -10; } }
+        
+        /* Здоров'я об'єктів */
+        .entity-container { position: relative; width: 30px; height: 30px; }
+        .hp-bar { width: 24px; height: 4px; background: #f00; position: absolute; bottom: -8px; left: 3px; border: 1px solid #000; border-radius: 2px; overflow: hidden; }
+        .hp-fill { height: 100%; background: #0f0; transition: width 0.3s, background-color 0.3s; }
+        .hp-fill.damaged { background: #ffcc00; }
+
+        .svg-icon svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.8)); }
+        .map-icon { font-size: 24px; text-align: center; line-height: 24px; filter: drop-shadow(0 0 4px #000); cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="hud">
+        <div class="hud-stat">
+            <span id="budgetDisplay" class="budget-value">250 000</span> млн ₴
+            <div class="income-value">+ <span id="incomeDisplay">0</span> млн/с</div>
+        </div>
+        <button id="chuyka-btn">Чуйка (50 млн)</button>
+        <div class="hud-stat" style="text-align: right;">
+            Збито: <span id="killsDisplay">0</span>
+        </div>
+    </div>
+    
+    <div id="center-message">
+        <h2 id="center-title">ВСТАНОВІТЬ РАДАР ДЛЯ ЗАПУСКУ СИСТЕМИ</h2>
+        <div id="countdown" style="font-size: 50px; color: #FFD700; display: none;">20</div>
+    </div>
+
+    <div id="toast"></div>
+    <div id="map"></div>
+
+    <div id="shop-container">
+        <div id="tabs">
+            <button class="tab-btn active" onclick="changeCategory('ppo')">ОБОРОНА</button>
+            <button class="tab-btn" onclick="changeCategory('income')">ЕКОНОМІКА</button>
+            <button class="tab-btn" onclick="changeCategory('radar')">РЛС</button>
+        </div>
+        <div id="shop"></div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+    
+    <script>
+        // ІГРОВІ ДАНІ ТА НАЛАШТУВАННЯ
+        let budget = 250000;
+        let kills = 0;
+        let incomePerSec = 0;
+        let hasChuyka = false;
+        let gameState = 'waiting';
+        let countdownTimer = 20;
+        let gameTime = 0;
+
+        const CITY_PENALTY = 500; 
+        const BLD_PENALTY = 200;  
+
+        // Усі ППО та Радари мають 2 HP
+        const shopData = [
+            { id: 'mg', cat: 'ppo', name: 'Кулемет', cost: 50, radius: 2500, chance: 0.15, cd: 40, hp: 2, limit: 20, count: 0 },
+            { id: 'zu', cat: 'ppo', name: 'ЗУ-23-2', cost: 150, radius: 5000, chance: 0.25, cd: 50, hp: 2, limit: 15, count: 0 },
+            { id: 'manpad', cat: 'ppo', name: 'ПЗРК', cost: 400, radius: 9000, chance: 0.40, cd: 70, hp: 2, limit: 12, count: 0 },
+            { id: 'osa', cat: 'ppo', name: 'Бук-М1', cost: 2500, radius: 22000, chance: 0.55, cd: 100, hp: 2, limit: 6, count: 0 },
+            { id: 'patriot', cat: 'ppo', name: 'Patriot', cost: 15000, radius: 55000, chance: 0.80, cd: 120, hp: 2, limit: 3, count: 0 },
+            { id: 'f16', cat: 'ppo', name: 'F-16 ланка', cost: 35000, radius: 65000, chance: 0.85, cd: 50, hp: 2, limit: 4, count: 0, isAir: true },
+            
+            { id: 'rad1', cat: 'radar', name: 'Малахіт', cost: 200, radius: 120000, hp: 2, limit: 10, count: 0, icon: '📡' },
+            { id: 'rad2', cat: 'radar', name: '79К6 Пелікан', cost: 1000, radius: 350000, hp: 2, limit: 4, count: 0, icon: '🛰️' },
+
+            // Будівлі (1 HP, знищуються одразу)
+            { id: 'inc1', cat: 'income', name: 'Вітряк', cost: 50, income: 0.5, hp: 1, icon: '🌬️' },
+            { id: 'inc2', cat: 'income', name: 'Завод', cost: 300, income: 3, hp: 1, icon: '🏭' },
+            { id: 'inc3', cat: 'income', name: 'ТЦ', cost: 800, income: 8, hp: 1, icon: '🛒' },
+            { id: 'inc4', cat: 'income', name: 'Аеропорт', cost: 5000, income: 150, hp: 1, icon: '✈️' }
+        ];
+
+        const cities = [
+            { name: "Київ", lat: 50.45, lng: 30.52 }, { name: "Львів", lat: 49.83, lng: 24.02 },
+            { name: "Вінниця", lat: 49.23, lng: 28.46 }, { name: "Хмельницький", lat: 49.42, lng: 26.98 }
+        ];
+
+        let selectedItem = null;
+        let currentCategory = 'ppo';
+        const entities = { defenses: [], radars: [], buildings: [] };
+        const enemies = [], projectiles = [];
+        let ukrainePolygon = null;
+
+        // ІКОНКИ (SVG)
+        const getShahedSvg = (angle) => `<div class="svg-icon" style="transform: rotate(${angle}deg); width: 24px; height: 24px;"><svg viewBox="0 0 100 100"><polygon points="50,10 90,90 50,75 10,90" fill="#777" stroke="#fff" stroke-width="2"/></svg></div>`;
+        const getKinzhalSvg = (angle) => `<div class="svg-icon" style="transform: rotate(${angle}deg); width: 28px; height: 28px;"><svg viewBox="0 0 100 100"><polygon points="50,0 60,80 50,100 40,80" fill="#ff4500" stroke="#fff" stroke-width="1"/><polygon points="45,80 55,80 50,90" fill="#fff"/></svg></div>`;
+        const getMigSvg = (angle) => `<div class="svg-icon" style="transform: rotate(${angle}deg); width: 36px; height: 36px;"><svg viewBox="0 0 100 100"><polygon points="50,5 65,50 90,65 65,70 60,95 40,95 35,70 10,65 35,50" fill="#333" stroke="#f00" stroke-width="1"/></svg></div>`;
+        const getF16Svg = (angle) => `<div class="svg-icon" style="transform: rotate(${angle}deg); width: 30px; height: 30px;"><svg viewBox="0 0 100 100"><polygon points="50,5 60,40 95,60 60,70 55,95 45,95 40,70 5,60 40,40" fill="#555" stroke="#0ff" stroke-width="1"/></svg></div>`;
+
+        // ІНІЦІАЛІЗАЦІЯ МАПИ
+        const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([49.0, 31.0], 6);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png').addTo(map);
+
+        fetch('https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json')
+            .then(res => res.json()).then(data => {
+                ukrainePolygon = data.features.find(f => f.id === 'UKR');
+                L.geoJSON(ukrainePolygon, { style: { color: '#0057B7', weight: 2, fillOpacity: 0.05 } }).addTo(map);
+            });
+
+        // ІНТЕРФЕЙС
+        const chuykaBtn = document.getElementById('chuyka-btn');
+        chuykaBtn.onclick = () => {
+            if (!hasChuyka && budget >= 50) {
+                budget -= 50; hasChuyka = true;
+                chuykaBtn.classList.add('active'); chuykaBtn.innerText = "Чуйка: АКТИВНА"; updateHUD();
+            }
+        };
+
+        function updateHUD() {
+            document.getElementById('budgetDisplay').innerText = Math.floor(budget).toLocaleString();
+            document.getElementById('incomeDisplay').innerText = incomePerSec.toFixed(1);
+            document.getElementById('killsDisplay').innerText = kills;
+        }
+
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.innerHTML = msg; t.style.display = 'block';
+            setTimeout(() => t.style.display = 'none', 3500);
+        }
+
+        window.changeCategory = (cat) => {
+            currentCategory = cat;
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.innerText.toLowerCase().includes(cat === 'ppo' ? 'оборона' : cat === 'income' ? 'економіка' : 'рлс')));
+            renderShop();
+        };
+
+        function renderShop() {
+            const s = document.getElementById('shop'); s.innerHTML = '';
+            shopData.filter(i => i.cat === currentCategory).forEach(item => {
+                const card = document.createElement('div');
+                card.className = `item-card ${selectedItem === item ? 'active' : ''}`;
+                card.innerHTML = `
+                    ${item.limit ? `<div class="i-limit">${item.count}/${item.limit}</div>` : ''}
+                    <div class="i-name">${item.name}</div>
+                    <div class="i-price">${item.cost} млн</div>
+                    <div class="i-extra">${item.income ? '+'+item.income+'/с' : item.chance ? (item.chance*100)+'% збиття' : 'HP: '+item.hp}</div>
+                `;
+                card.onclick = () => { selectedItem = selectedItem === item ? null : item; renderShop(); };
+                s.appendChild(card);
+            });
+        }
+        renderShop();
+
+        // СТВОРЕННЯ МАРКЕРУ З HP
+        function createEntityHtml(item, iconHtml) {
+            if (item.cat === 'income') return `<div class="map-icon">${iconHtml}</div>`;
+            return `
+                <div class="entity-container">
+                    <div style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">
+                        ${iconHtml.includes('<svg') ? iconHtml : `<div class="map-icon">${iconHtml}</div>`}
+                    </div>
+                    <div class="hp-bar"><div class="hp-fill" style="width:100%"></div></div>
+                </div>`;
+        }
+
+        function updateEntityHp(entity) {
+            if (entity.item.cat === 'income') return;
+            const hpFill = entity.marker.getElement().querySelector('.hp-fill');
+            const percent = (entity.hp / entity.item.hp) * 100;
+            hpFill.style.width = percent + '%';
+            if (percent <= 50) hpFill.classList.add('damaged');
+            else hpFill.classList.remove('damaged');
+        }
+
+        // РЕМОНТ
+        function repairEntity(e, entity) {
+            L.DomEvent.stopPropagation(e); // Щоб не ставилась нова пушка при кліку
+            if (selectedItem) return; // Якщо вибрано зброю в магазині - будуємо, а не ремонтуємо
+            
+            if (entity.hp < entity.item.hp) {
+                const cost = Math.floor(entity.item.cost * 0.5);
+                if (budget >= cost) {
+                    budget -= cost;
+                    entity.hp = entity.item.hp;
+                    updateEntityHp(entity);
+                    updateHUD();
+                    showToast(`🛠️ Відремонтовано ${entity.item.name} за ${cost} млн.`);
+                } else {
+                    showToast("⚠️ Недостатньо коштів для ремонту!");
+                }
+            }
+        }
+
+        // МАП КЛІК (Встановлення)
+        map.on('click', (e) => {
+            if (!selectedItem) return;
+            if (budget < selectedItem.cost) { showToast("⚠️ Недостатньо коштів!"); return; }
+            if (selectedItem.limit && selectedItem.count >= selectedItem.limit) { showToast("⚠️ Ліміт вичерпано!"); return; }
+
+            if (ukrainePolygon) {
+                const pt = turf.point([e.latlng.lng, e.latlng.lat]);
+                if (!turf.booleanPointInPolygon(pt, ukrainePolygon)) { showToast("⚠️ Тільки на території України!"); return; }
+            }
+
+            budget -= selectedItem.cost;
+            selectedItem.count++;
+
+            let ent = { item: selectedItem, latlng: e.latlng, hp: selectedItem.hp };
+            
+            let iconHtml = selectedItem.icon || (selectedItem.isAir ? getF16Svg(90) : '🟢');
+            const iconObj = L.divIcon({ html: createEntityHtml(selectedItem, iconHtml), className: '', iconSize: [30, 30], iconAnchor: [15,15] });
+            
+            ent.marker = L.marker(e.latlng, { icon: iconObj, interactive: true }).addTo(map);
+            ent.marker.on('click', (evt) => repairEntity(evt, ent)); // Додаємо подію ремонту
+
+            if (selectedItem.cat === 'ppo') {
+                ent.cooldown = 0;
+                ent.circle = L.circle(e.latlng, { radius: selectedItem.radius, color: '#f00', weight: 1, fillOpacity: 0.05 }).addTo(map);
+                if (selectedItem.isAir) { ent.angle = 0; ent.center = e.latlng; }
+                entities.defenses.push(ent);
+            } else if (selectedItem.cat === 'radar') {
+                ent.circle = L.circle(e.latlng, { radius: selectedItem.radius, color: '#0ff', weight: 1, dashArray: '5,5', fillOpacity: 0.02 }).addTo(map);
+                entities.radars.push(ent);
+                if (gameState === 'waiting') { gameState = 'countdown'; document.getElementById('countdown').style.display = 'block'; }
+            } else {
+                entities.buildings.push(ent);
+                incomePerSec = entities.buildings.reduce((a, b) => a + b.item.income, 0);
+            }
+            selectedItem = null;
+            renderShop(); updateHUD();
+        });
+
+        // ВОРОГИ
+        function spawnNormalEnemy() {
+            const start = { lat: 45 + Math.random()*10, lng: 35 + Math.random()*5 };
+            let target;
+            const r = Math.random();
+            
+            if (r < 0.4) target = cities[0]; 
+            else if (r < 0.6) target = cities[Math.floor(1 + Math.random()*3)]; 
+            else if (r < 0.8 && entities.buildings.length > 0) target = entities.buildings[Math.floor(Math.random()*entities.buildings.length)].latlng; 
+            else if (entities.defenses.length > 0) target = entities.defenses[Math.floor(Math.random()*entities.defenses.length)].latlng; 
+            else target = { lat: 48 + Math.random()*2, lng: 25 + Math.random()*5 };
+
+            const angle = Math.atan2(target.lng - start.lng, target.lat - start.lat) * 180 / Math.PI;
+            const marker = L.marker([start.lat, start.lng], { icon: L.divIcon({ html: getShahedSvg(angle), className:'' }) }).addTo(map);
+            marker.setOpacity(0);
+            
+            // Дуже повільні шахеди
+            let enemy = { type: 'shahed', lat: start.lat, lng: start.lng, target, marker, speed: 0.0003 + (gameTime*0.000000005), hp: 1 };
+            
+            if (hasChuyka) {
+                enemy.line = L.polyline([[start.lat, start.lng], [target.lat, target.lng]], { color: 'red', weight: 1, dashArray: '4, 6', opacity: 0 }).addTo(map);
+            }
+            enemies.push(enemy);
+        }
+
+        function spawnMig() {
+            showToast("🚨 УВАГА! Зліт МіГ-31К. Загроза пуску 'Кинджалу'!");
+            
+            // Міг летить з глибини РФ до кордону
+            const start = { lat: 55, lng: 40 }; 
+            const launchTarget = { lat: 51, lng: 35 }; 
+            
+            const angle = Math.atan2(launchTarget.lng - start.lng, launchTarget.lat - start.lat) * 180 / Math.PI;
+            const marker = L.marker([start.lat, start.lng], { icon: L.divIcon({ html: getMigSvg(angle), className:'' }) }).addTo(map);
+            
+            enemies.push({ type: 'mig', lat: start.lat, lng: start.lng, target: launchTarget, marker, speed: 0.003, isMig: true });
+        }
+
+        function launchKinzhal(lat, lng) {
+            showToast("🚀 ПУСК 'КИНДЖАЛУ'! Працювати може лише F-16!");
+            const target = cities[Math.floor(Math.random() * cities.length)]; // Б'є по великих містах
+            const angle = Math.atan2(target.lng - lng, target.lat - lat) * 180 / Math.PI;
+            const marker = L.marker([lat, lng], { icon: L.divIcon({ html: getKinzhalSvg(angle), className:'' }) }).addTo(map);
+            
+            // Кинджал надшвидкий
+            let kinzhal = { type: 'kinzhal', lat: lat, lng: lng, target, marker, speed: 0.002, hp: 1 };
+            if (hasChuyka) {
+                kinzhal.line = L.polyline([[lat, lng], [target.lat, target.lng]], { color: '#ff4500', weight: 2, opacity: 0 }).addTo(map);
+            }
+            enemies.push(kinzhal);
+        }
+
+        function triggerExplosion(lat, lng) {
+            const expMarker = L.marker([lat, lng], { icon: L.divIcon({ html: '<div class="explosion-epic"></div>', className:'' }) }).addTo(map);
+            setTimeout(() => map.removeLayer(expMarker), 800);
+        }
+
+        function handleHitEntity(targetObj) {
+            budget -= BLD_PENALTY;
+            // Перевіряємо чи це будівля
+            const bIdx = entities.buildings.findIndex(b => b.latlng === targetObj);
+            if (bIdx > -1) { 
+                map.removeLayer(entities.buildings[bIdx].marker); 
+                entities.buildings.splice(bIdx, 1); 
+                incomePerSec = entities.buildings.reduce((a, b) => a + b.item.income, 0); 
+                return; 
+            }
+            
+            // Перевіряємо ППО
+            const dIdx = entities.defenses.findIndex(d => d.latlng === targetObj);
+            if (dIdx > -1) {
+                entities.defenses[dIdx].hp--;
+                updateEntityHp(entities.defenses[dIdx]);
+                if (entities.defenses[dIdx].hp <= 0) {
+                    map.removeLayer(entities.defenses[dIdx].marker); map.removeLayer(entities.defenses[dIdx].circle);
+                    entities.defenses[dIdx].item.count--; entities.defenses.splice(dIdx, 1); renderShop();
+                }
+                return;
+            }
+
+            // Перевіряємо Радари
+            const rIdx = entities.radars.findIndex(r => r.latlng === targetObj);
+            if (rIdx > -1) {
+                entities.radars[rIdx].hp--;
+                updateEntityHp(entities.radars[rIdx]);
+                if (entities.radars[rIdx].hp <= 0) {
+                    map.removeLayer(entities.radars[rIdx].marker); map.removeLayer(entities.radars[rIdx].circle);
+                    entities.radars[rIdx].item.count--; entities.radars.splice(rIdx, 1); renderShop();
+                }
+            }
+        }
+
+        function gameLoop() {
+            gameTime++;
+            if (gameTime % 60 === 0) {
+                budget += incomePerSec;
+                if (gameState === 'countdown') {
+                    countdownTimer--; document.getElementById('countdown').innerText = countdownTimer;
+                    if (countdownTimer <= 0) { gameState = 'playing'; document.getElementById('center-message').style.display = 'none'; }
+                }
+                updateHUD();
+            }
+
+            if (gameState === 'playing') {
+                if (Math.random() < 0.015) spawnNormalEnemy();
+                // Дуже рідкісний шанс на Міг (приблизно 1 раз на пару хвилин)
+                if (Math.random() < 0.0005) spawnMig();
+            }
+
+            // ППО (рух F-16)
+            entities.defenses.forEach(d => {
+                if (d.item.isAir) {
+                    d.angle += 0.015;
+                    const r = d.item.radius / 111000;
+                    d.latlng = L.latLng(d.center.lat + r*Math.sin(d.angle), d.center.lng + r*Math.cos(d.angle)*1.5);
+                    const heading = (d.angle * 180 / Math.PI) + 90;
+                    
+                    // Перестворюємо іконку, щоб зберігати HP бар
+                    const iconObj = L.divIcon({ html: createEntityHtml(d.item, getF16Svg(heading)), className: '', iconSize: [30, 30], iconAnchor: [15,15] });
+                    d.marker.setLatLng(d.latlng);
+                    d.marker.setIcon(iconObj);
+                    updateEntityHp(d);
+                }
+                if (d.cooldown > 0) d.cooldown--;
+            });
+
+            // ВОРОГИ
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const e = enemies[i];
+                const cur = L.latLng(e.lat, e.lng);
+                
+                if (e.isMig) {
+                    e.marker.setOpacity(1); // Міг видно завжди
+                } else {
+                    const visible = entities.radars.some(r => map.distance(cur, r.latlng) <= r.item.radius);
+                    e.marker.setOpacity(visible ? 1 : 0);
+                    if (e.line) {
+                        e.line.setStyle({ opacity: (visible && hasChuyka) ? 0.6 : 0 });
+                        let coords = e.line.getLatLngs(); coords[0] = [e.lat, e.lng]; e.line.setLatLngs(coords);
+                    }
+                }
+
+                const dLat = e.target.lat - e.lat, dLng = e.target.lng - e.lng;
+                const dist = Math.sqrt(dLat*dLat + dLng*dLng);
+
+                // Досягнув цілі
+                if (dist < 0.04) {
+                    if (e.isMig) {
+                        launchKinzhal(e.lat, e.lng);
+                        map.removeLayer(e.marker); enemies.splice(i, 1); continue;
+                    }
+
+                    triggerExplosion(e.lat, e.lng);
+                    
+                    if (e.target.name) budget -= CITY_PENALTY;
+                    else handleHitEntity(e.target);
+
+                    map.removeLayer(e.marker); if (e.line) map.removeLayer(e.line);
+                    enemies.splice(i, 1); updateHUD(); continue;
+                }
+
+                e.lat += (dLat/dist)*e.speed; e.lng += (dLng/dist)*e.speed;
+                e.marker.setLatLng([e.lat, e.lng]);
+
+                // ППО Вогонь
+                if (!e.isMig) {
+                    for (let d of entities.defenses) {
+                        // Якщо це Кинджал - стріляє ТІЛЬКИ F-16
+                        if (e.type === 'kinzhal' && !d.item.isAir) continue;
+                        
+                        let checkPt = d.item.isAir ? d.center : d.latlng;
+                        if (d.cooldown === 0 && map.distance(cur, checkPt) <= d.item.radius) {
+                            d.cooldown = d.item.cd;
+                            const line = L.polyline([d.latlng, cur], { color: d.item.isAir ? '#0ff' : '#ff0', weight: 2, className: 'tracer' }).addTo(map);
+                            setTimeout(() => map.removeLayer(line), 300);
+                            
+                            if (Math.random() < d.item.chance) { e.hp--; break; }
+                        }
+                    }
+                }
+
+                if (e.hp <= 0) {
+                    triggerExplosion(e.lat, e.lng);
+                    map.removeLayer(e.marker); if (e.line) map.removeLayer(e.line);
+                    enemies.splice(i, 1); kills++; budget += 50; updateHUD();
+                }
+            }
+            requestAnimationFrame(gameLoop);
+        }
+        updateHUD(); requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
