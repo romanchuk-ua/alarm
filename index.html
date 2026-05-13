@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Air Defense: MiG-31K Update</title>
+    <title>Air Defense: Custom Images Update</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <style>
         body, html { margin: 0; padding: 0; height: 100%; background-color: #0f0f0f; font-family: 'Segoe UI', sans-serif; overflow: hidden; user-select: none; }
@@ -33,16 +33,20 @@
         #toast { position: absolute; top: 80px; left: 50%; transform: translateX(-50%); background: rgba(136, 0, 0, 0.9); color: white; padding: 10px 20px; border-radius: 8px; z-index: 2000; display: none; font-weight: bold; border: 1px solid #fff; text-align: center; }
         #center-message { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); text-align: center; color: white; z-index: 2000; pointer-events: none; text-shadow: 0 0 10px #000; }
         
-        /* Гарний багатошаровий вибух */
+        /* Вибух */
         .explosion-epic { width: 60px; height: 60px; background: radial-gradient(circle, #ffffff 10%, #ffff00 30%, #ff4500 50%, #8b0000 80%, transparent 100%); border-radius: 50%; animation: epicBoom 0.8s ease-out forwards; box-shadow: 0 0 20px #ff4500, inset 0 0 20px #fff; }
         @keyframes epicBoom { 0% { transform: scale(0.1); opacity: 1; filter: brightness(2); } 50% { transform: scale(1.5); opacity: 0.8; } 100% { transform: scale(3); opacity: 0; filter: brightness(0.5); } }
         
         .tracer { stroke-width: 2; stroke-dasharray: 5; animation: dash 0.3s linear infinite; }
         @keyframes dash { to { stroke-dashoffset: -10; } }
         
-        /* Здоров'я об'єктів */
-        .entity-container { position: relative; width: 30px; height: 30px; }
-        .hp-bar { width: 24px; height: 4px; background: #f00; position: absolute; bottom: -8px; left: 3px; border: 1px solid #000; border-radius: 2px; overflow: hidden; }
+        /* Оформлення картинок */
+        .entity-container { position: relative; width: 32px; height: 32px; }
+        .img-wrapper { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
+        .entity-img { width: 32px; height: 32px; object-fit: contain; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8)); }
+        
+        /* HP бари */
+        .hp-bar { width: 24px; height: 4px; background: #f00; position: absolute; bottom: -8px; left: 4px; border: 1px solid #000; border-radius: 2px; overflow: hidden; }
         .hp-fill { height: 100%; background: #0f0; transition: width 0.3s, background-color 0.3s; }
         .hp-fill.damaged { background: #ffcc00; }
 
@@ -84,7 +88,6 @@
     <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
     
     <script>
-        // ІГРОВІ ДАНІ ТА НАЛАШТУВАННЯ
         let budget = 250000;
         let kills = 0;
         let incomePerSec = 0;
@@ -96,19 +99,18 @@
         const CITY_PENALTY = 500; 
         const BLD_PENALTY = 200;  
 
-        // Усі ППО та Радари мають 2 HP
+        // Магазин (вказано шляхи до картинок)
         const shopData = [
-            { id: 'mg', cat: 'ppo', name: 'Кулемет', cost: 50, radius: 2500, chance: 0.15, cd: 40, hp: 2, limit: 20, count: 0 },
-            { id: 'zu', cat: 'ppo', name: 'ЗУ-23-2', cost: 150, radius: 5000, chance: 0.25, cd: 50, hp: 2, limit: 15, count: 0 },
-            { id: 'manpad', cat: 'ppo', name: 'ПЗРК', cost: 400, radius: 9000, chance: 0.40, cd: 70, hp: 2, limit: 12, count: 0 },
-            { id: 'osa', cat: 'ppo', name: 'Бук-М1', cost: 2500, radius: 22000, chance: 0.55, cd: 100, hp: 2, limit: 6, count: 0 },
-            { id: 'patriot', cat: 'ppo', name: 'Patriot', cost: 15000, radius: 55000, chance: 0.80, cd: 120, hp: 2, limit: 3, count: 0 },
-            { id: 'f16', cat: 'ppo', name: 'F-16 ланка', cost: 35000, radius: 65000, chance: 0.85, cd: 50, hp: 2, limit: 4, count: 0, isAir: true },
+            { id: 'mg', cat: 'ppo', name: 'Кулемет', cost: 50, radius: 2500, chance: 0.15, cd: 40, hp: 2, limit: 20, count: 0, img: 'img/kulemet.png' },
+            { id: 'zu', cat: 'ppo', name: 'ЗУ-23-2', cost: 150, radius: 5000, chance: 0.25, cd: 50, hp: 2, limit: 15, count: 0, img: 'img/zu-23-2.png' },
+            { id: 'manpad', cat: 'ppo', name: 'Джавелін', cost: 400, radius: 9000, chance: 0.40, cd: 70, hp: 2, limit: 12, count: 0, img: 'img/javelin.png' },
+            { id: 'osa', cat: 'ppo', name: 'Бук-М1', cost: 2500, radius: 22000, chance: 0.55, cd: 100, hp: 2, limit: 6, count: 0, img: 'img/buk-m1.png' },
+            { id: 'patriot', cat: 'ppo', name: 'Patriot', cost: 15000, radius: 55000, chance: 0.80, cd: 120, hp: 2, limit: 3, count: 0, img: 'img/patriot.png' },
+            { id: 'f16', cat: 'ppo', name: 'F-16 ланка', cost: 35000, radius: 65000, chance: 0.85, cd: 50, hp: 2, limit: 4, count: 0, isAir: true, img: 'img/f16.png' },
             
-            { id: 'rad1', cat: 'radar', name: 'Малахіт', cost: 200, radius: 120000, hp: 2, limit: 10, count: 0, icon: '📡' },
-            { id: 'rad2', cat: 'radar', name: '79К6 Пелікан', cost: 1000, radius: 350000, hp: 2, limit: 4, count: 0, icon: '🛰️' },
+            { id: 'rad1', cat: 'radar', name: 'Малахіт', cost: 200, radius: 120000, hp: 2, limit: 10, count: 0, img: 'img/rls_malahit.png' },
+            { id: 'rad2', cat: 'radar', name: '79К6 Пелікан', cost: 1000, radius: 350000, hp: 2, limit: 4, count: 0, img: 'img/79k6-rls.png' },
 
-            // Будівлі (1 HP, знищуються одразу)
             { id: 'inc1', cat: 'income', name: 'Вітряк', cost: 50, income: 0.5, hp: 1, icon: '🌬️' },
             { id: 'inc2', cat: 'income', name: 'Завод', cost: 300, income: 3, hp: 1, icon: '🏭' },
             { id: 'inc3', cat: 'income', name: 'ТЦ', cost: 800, income: 8, hp: 1, icon: '🛒' },
@@ -126,11 +128,15 @@
         const enemies = [], projectiles = [];
         let ukrainePolygon = null;
 
-        // ІКОНКИ (SVG)
-        const getShahedSvg = (angle) => `<div class="svg-icon" style="transform: rotate(${angle}deg); width: 24px; height: 24px;"><svg viewBox="0 0 100 100"><polygon points="50,10 90,90 50,75 10,90" fill="#777" stroke="#fff" stroke-width="2"/></svg></div>`;
+        // Генератори HTML для картинок ворогів
+        // Шахед дивиться вгору (0deg = UP)
+        const getShahedHtml = (angle) => `<div class="img-wrapper"><img src="img/shahed.png" class="entity-img" style="transform: rotate(${angle}deg);"></div>`;
+        
+        // МіГ дивиться вліво, тому додаємо 90 градусів, щоб узгодити з кутом напрямку
+        const getMigHtml = (angle) => `<div class="img-wrapper"><img src="img/mig31k.png" class="entity-img" style="width:40px; height:40px; transform: rotate(${angle + 90}deg);"></div>`;
+        
+        // Залишаємо SVG для Кинджалу, оскільки картинку для нього не вказували
         const getKinzhalSvg = (angle) => `<div class="svg-icon" style="transform: rotate(${angle}deg); width: 28px; height: 28px;"><svg viewBox="0 0 100 100"><polygon points="50,0 60,80 50,100 40,80" fill="#ff4500" stroke="#fff" stroke-width="1"/><polygon points="45,80 55,80 50,90" fill="#fff"/></svg></div>`;
-        const getMigSvg = (angle) => `<div class="svg-icon" style="transform: rotate(${angle}deg); width: 36px; height: 36px;"><svg viewBox="0 0 100 100"><polygon points="50,5 65,50 90,65 65,70 60,95 40,95 35,70 10,65 35,50" fill="#333" stroke="#f00" stroke-width="1"/></svg></div>`;
-        const getF16Svg = (angle) => `<div class="svg-icon" style="transform: rotate(${angle}deg); width: 30px; height: 30px;"><svg viewBox="0 0 100 100"><polygon points="50,5 60,40 95,60 60,70 55,95 45,95 40,70 5,60 40,40" fill="#555" stroke="#0ff" stroke-width="1"/></svg></div>`;
 
         // ІНІЦІАЛІЗАЦІЯ МАПИ
         const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([49.0, 31.0], 6);
@@ -142,7 +148,6 @@
                 L.geoJSON(ukrainePolygon, { style: { color: '#0057B7', weight: 2, fillOpacity: 0.05 } }).addTo(map);
             });
 
-        // ІНТЕРФЕЙС
         const chuykaBtn = document.getElementById('chuyka-btn');
         chuykaBtn.onclick = () => {
             if (!hasChuyka && budget >= 50) {
@@ -174,8 +179,13 @@
             shopData.filter(i => i.cat === currentCategory).forEach(item => {
                 const card = document.createElement('div');
                 card.className = `item-card ${selectedItem === item ? 'active' : ''}`;
+                
+                // Відображення іконки або картинки прямо в магазині
+                const visual = item.img ? `<img src="${item.img}" style="height:32px; object-fit:contain; margin-bottom:5px;">` : `<div style="font-size:24px; margin-bottom:5px;">${item.icon}</div>`;
+                
                 card.innerHTML = `
                     ${item.limit ? `<div class="i-limit">${item.count}/${item.limit}</div>` : ''}
+                    ${visual}
                     <div class="i-name">${item.name}</div>
                     <div class="i-price">${item.cost} млн</div>
                     <div class="i-extra">${item.income ? '+'+item.income+'/с' : item.chance ? (item.chance*100)+'% збиття' : 'HP: '+item.hp}</div>
@@ -186,13 +196,13 @@
         }
         renderShop();
 
-        // СТВОРЕННЯ МАРКЕРУ З HP
-        function createEntityHtml(item, iconHtml) {
-            if (item.cat === 'income') return `<div class="map-icon">${iconHtml}</div>`;
+        // Формування HTML для об'єктів на карті
+        function createEntityHtml(item, heading = 0) {
+            if (item.cat === 'income') return `<div class="map-icon">${item.icon}</div>`;
             return `
                 <div class="entity-container">
-                    <div style="position:absolute; top:0; left:0; width:100%; height:100%; display:flex; justify-content:center; align-items:center;">
-                        ${iconHtml.includes('<svg') ? iconHtml : `<div class="map-icon">${iconHtml}</div>`}
+                    <div class="img-wrapper">
+                        <img src="${item.img}" class="entity-img" style="transform: rotate(${heading}deg);">
                     </div>
                     <div class="hp-bar"><div class="hp-fill" style="width:100%"></div></div>
                 </div>`;
@@ -209,8 +219,8 @@
 
         // РЕМОНТ
         function repairEntity(e, entity) {
-            L.DomEvent.stopPropagation(e); // Щоб не ставилась нова пушка при кліку
-            if (selectedItem) return; // Якщо вибрано зброю в магазині - будуємо, а не ремонтуємо
+            L.DomEvent.stopPropagation(e);
+            if (selectedItem) return; 
             
             if (entity.hp < entity.item.hp) {
                 const cost = Math.floor(entity.item.cost * 0.5);
@@ -226,7 +236,7 @@
             }
         }
 
-        // МАП КЛІК (Встановлення)
+        // ВСТАНОВЛЕННЯ
         map.on('click', (e) => {
             if (!selectedItem) return;
             if (budget < selectedItem.cost) { showToast("⚠️ Недостатньо коштів!"); return; }
@@ -242,11 +252,9 @@
 
             let ent = { item: selectedItem, latlng: e.latlng, hp: selectedItem.hp };
             
-            let iconHtml = selectedItem.icon || (selectedItem.isAir ? getF16Svg(90) : '🟢');
-            const iconObj = L.divIcon({ html: createEntityHtml(selectedItem, iconHtml), className: '', iconSize: [30, 30], iconAnchor: [15,15] });
-            
+            const iconObj = L.divIcon({ html: createEntityHtml(selectedItem), className: '', iconSize: [32, 32], iconAnchor: [16, 16] });
             ent.marker = L.marker(e.latlng, { icon: iconObj, interactive: true }).addTo(map);
-            ent.marker.on('click', (evt) => repairEntity(evt, ent)); // Додаємо подію ремонту
+            ent.marker.on('click', (evt) => repairEntity(evt, ent));
 
             if (selectedItem.cat === 'ppo') {
                 ent.cooldown = 0;
@@ -278,10 +286,9 @@
             else target = { lat: 48 + Math.random()*2, lng: 25 + Math.random()*5 };
 
             const angle = Math.atan2(target.lng - start.lng, target.lat - start.lat) * 180 / Math.PI;
-            const marker = L.marker([start.lat, start.lng], { icon: L.divIcon({ html: getShahedSvg(angle), className:'' }) }).addTo(map);
+            const marker = L.marker([start.lat, start.lng], { icon: L.divIcon({ html: getShahedHtml(angle), className:'' }), iconSize: [32, 32], iconAnchor: [16, 16] }).addTo(map);
             marker.setOpacity(0);
             
-            // Дуже повільні шахеди
             let enemy = { type: 'shahed', lat: start.lat, lng: start.lng, target, marker, speed: 0.0003 + (gameTime*0.000000005), hp: 1 };
             
             if (hasChuyka) {
@@ -292,24 +299,21 @@
 
         function spawnMig() {
             showToast("🚨 УВАГА! Зліт МіГ-31К. Загроза пуску 'Кинджалу'!");
-            
-            // Міг летить з глибини РФ до кордону
             const start = { lat: 55, lng: 40 }; 
             const launchTarget = { lat: 51, lng: 35 }; 
             
             const angle = Math.atan2(launchTarget.lng - start.lng, launchTarget.lat - start.lat) * 180 / Math.PI;
-            const marker = L.marker([start.lat, start.lng], { icon: L.divIcon({ html: getMigSvg(angle), className:'' }) }).addTo(map);
+            const marker = L.marker([start.lat, start.lng], { icon: L.divIcon({ html: getMigHtml(angle), className:'' }), iconSize: [40, 40], iconAnchor: [20, 20] }).addTo(map);
             
             enemies.push({ type: 'mig', lat: start.lat, lng: start.lng, target: launchTarget, marker, speed: 0.003, isMig: true });
         }
 
         function launchKinzhal(lat, lng) {
             showToast("🚀 ПУСК 'КИНДЖАЛУ'! Працювати може лише F-16!");
-            const target = cities[Math.floor(Math.random() * cities.length)]; // Б'є по великих містах
+            const target = cities[Math.floor(Math.random() * cities.length)];
             const angle = Math.atan2(target.lng - lng, target.lat - lat) * 180 / Math.PI;
-            const marker = L.marker([lat, lng], { icon: L.divIcon({ html: getKinzhalSvg(angle), className:'' }) }).addTo(map);
+            const marker = L.marker([lat, lng], { icon: L.divIcon({ html: getKinzhalSvg(angle), className:'' }), iconSize: [28, 28], iconAnchor: [14, 14] }).addTo(map);
             
-            // Кинджал надшвидкий
             let kinzhal = { type: 'kinzhal', lat: lat, lng: lng, target, marker, speed: 0.002, hp: 1 };
             if (hasChuyka) {
                 kinzhal.line = L.polyline([[lat, lng], [target.lat, target.lng]], { color: '#ff4500', weight: 2, opacity: 0 }).addTo(map);
@@ -324,7 +328,6 @@
 
         function handleHitEntity(targetObj) {
             budget -= BLD_PENALTY;
-            // Перевіряємо чи це будівля
             const bIdx = entities.buildings.findIndex(b => b.latlng === targetObj);
             if (bIdx > -1) { 
                 map.removeLayer(entities.buildings[bIdx].marker); 
@@ -333,7 +336,6 @@
                 return; 
             }
             
-            // Перевіряємо ППО
             const dIdx = entities.defenses.findIndex(d => d.latlng === targetObj);
             if (dIdx > -1) {
                 entities.defenses[dIdx].hp--;
@@ -345,7 +347,6 @@
                 return;
             }
 
-            // Перевіряємо Радари
             const rIdx = entities.radars.findIndex(r => r.latlng === targetObj);
             if (rIdx > -1) {
                 entities.radars[rIdx].hp--;
@@ -370,20 +371,20 @@
 
             if (gameState === 'playing') {
                 if (Math.random() < 0.015) spawnNormalEnemy();
-                // Дуже рідкісний шанс на Міг (приблизно 1 раз на пару хвилин)
                 if (Math.random() < 0.0005) spawnMig();
             }
 
-            // ППО (рух F-16)
+            // Оновлення F-16 (з поворотом картинки)
             entities.defenses.forEach(d => {
                 if (d.item.isAir) {
                     d.angle += 0.015;
                     const r = d.item.radius / 111000;
                     d.latlng = L.latLng(d.center.lat + r*Math.sin(d.angle), d.center.lng + r*Math.cos(d.angle)*1.5);
+                    
+                    // Обчислення правильного напрямку носа літака (дотична до кола)
                     const heading = (d.angle * 180 / Math.PI) + 90;
                     
-                    // Перестворюємо іконку, щоб зберігати HP бар
-                    const iconObj = L.divIcon({ html: createEntityHtml(d.item, getF16Svg(heading)), className: '', iconSize: [30, 30], iconAnchor: [15,15] });
+                    const iconObj = L.divIcon({ html: createEntityHtml(d.item, heading), className: '', iconSize: [32, 32], iconAnchor: [16, 16] });
                     d.marker.setLatLng(d.latlng);
                     d.marker.setIcon(iconObj);
                     updateEntityHp(d);
@@ -391,13 +392,13 @@
                 if (d.cooldown > 0) d.cooldown--;
             });
 
-            // ВОРОГИ
+            // Обробка ворогів
             for (let i = enemies.length - 1; i >= 0; i--) {
                 const e = enemies[i];
                 const cur = L.latLng(e.lat, e.lng);
                 
                 if (e.isMig) {
-                    e.marker.setOpacity(1); // Міг видно завжди
+                    e.marker.setOpacity(1); 
                 } else {
                     const visible = entities.radars.some(r => map.distance(cur, r.latlng) <= r.item.radius);
                     e.marker.setOpacity(visible ? 1 : 0);
@@ -410,7 +411,6 @@
                 const dLat = e.target.lat - e.lat, dLng = e.target.lng - e.lng;
                 const dist = Math.sqrt(dLat*dLat + dLng*dLng);
 
-                // Досягнув цілі
                 if (dist < 0.04) {
                     if (e.isMig) {
                         launchKinzhal(e.lat, e.lng);
@@ -429,10 +429,8 @@
                 e.lat += (dLat/dist)*e.speed; e.lng += (dLng/dist)*e.speed;
                 e.marker.setLatLng([e.lat, e.lng]);
 
-                // ППО Вогонь
                 if (!e.isMig) {
                     for (let d of entities.defenses) {
-                        // Якщо це Кинджал - стріляє ТІЛЬКИ F-16
                         if (e.type === 'kinzhal' && !d.item.isAir) continue;
                         
                         let checkPt = d.item.isAir ? d.center : d.latlng;
